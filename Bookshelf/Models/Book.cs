@@ -29,11 +29,13 @@ namespace Bookshelf.Models
         [Required]
         public int AuthorId { get; set; }
 
+        [Display(Name = "Created By")]
         public string ApplicationUserId { get; set; }
 
         public virtual Author Author { get; set; }
 
-        public ApplicationUser ApplicationUser { get; set; }
+        [Display(Name = "Created By")]
+        public virtual ApplicationUser ApplicationUser { get; set; }
 
     }
 }

@@ -13,28 +13,29 @@ using Microsoft.AspNetCore.Authorization;
 namespace Bookshelf.Controllers
 {
     [Authorize]
-    public class AuthorsController : Controller
+    public class BooksController : Controller
     {
         private readonly ApplicationDbContext _context;
         private readonly UserManager<ApplicationUser> _userManager;
 
-        public AuthorsController(ApplicationDbContext context, UserManager<ApplicationUser> userManager)
+        public BooksController(ApplicationDbContext context, UserManager<ApplicationUser> userManager)
         {
             _context = context;
             _userManager = userManager;
         }
 
-        // GET: Authors
+        // GET: Books
         public async Task<IActionResult> Index()
         {
             var user = await GetUserAsync();
-            var applicationDbContext = _context.Author
-                .Where(a => a.ApplicationUserId == user.Id)
-                .Include(a => a.ApplicationUser);
+            var applicationDbContext = _context.Book
+                .Where(b => b.ApplicationUserId == user.Id)
+                .Include(b => b.ApplicationUser)
+                .Include(b => b.Author);
             return View(await applicationDbContext.ToListAsync());
         }
 
-        // GET: Authors/Details/5
+        // GET: Books/Details/5
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null)
@@ -42,52 +43,50 @@ namespace Bookshelf.Controllers
                 return NotFound();
             }
 
-            var author = await _context.Author
-                .Include(a => a.ApplicationUser)
+            var book = await _context.Book
+                .Include(b => b.ApplicationUser)
+                .Include(b => b.Author)
                 .FirstOrDefaultAsync(m => m.Id == id);
-
-
-            if (author == null)
+            if (book == null)
             {
                 return NotFound();
             }
 
-            var wasCreatedByLoggedInUser = await WasCreatedByUser(author);
-
-            if (!wasCreatedByLoggedInUser)
-            {
-                return NotFound();
-            }
-
-            return View(author);
+            return View(book);
         }
 
-        // GET: Authors/Create
-        public IActionResult Create()
+        // GET: Books/Create
+        public async Task<IActionResult> Create()
         {
+            var user = await GetUserAsync();
+            ViewData["AuthorId"] = new SelectList(
+                _context.Author.Where(a => a.ApplicationUserId == user.Id), "Id", "FullName");
             return View();
         }
 
-        // POST: Authors/Create
+        // POST: Books/Create
         // To protect from overposting attacks, please enable the specific properties you want to bind to, for 
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Id,FirstName,LastName,Penname,PreferredGenre")] Author author)
+        public async Task<IActionResult> Create([Bind("Id,ISBN,Title,Genre,PublishedDate,AuthorId,ApplicationUserId")] Book book)
         {
+            var user = await GetUserAsync();
             if (ModelState.IsValid)
             {
-                var user = await GetUserAsync();
-                author.ApplicationUserId = user.Id;
-                _context.Add(author);
+                book.ApplicationUserId = user.Id;
+
+                _context.Add(book);
                 await _context.SaveChangesAsync();
                 return RedirectToAction(nameof(Index));
             }
 
-            return View(author);
+            ViewData["AuthorId"] = new SelectList(
+                _context.Author.Where(a => a.ApplicationUserId == user.Id), "Id", "FirstName", book.AuthorId);
+            return View(book);
         }
 
-        // GET: Authors/Edit/5
+        // GET: Books/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
@@ -95,30 +94,38 @@ namespace Bookshelf.Controllers
                 return NotFound();
             }
 
-            var author = await _context.Author.FindAsync(id);
-            if (author == null)
+            var book = await _context.Book.FindAsync(id);
+            if (book == null)
             {
                 return NotFound();
             }
 
-            var wasCreatedByLoggedInUser = await WasCreatedByUser(author);
-
-            if (!wasCreatedByLoggedInUser)
+            var user = await GetUserAsync();
+            var isUserBook = await WasCreatedByUser(book);
+            if (!isUserBook)
             {
                 return NotFound();
             }
 
-            return View(author);
+            ViewData["AuthorId"] = new SelectList(
+                _context.Author.Where(a => a.ApplicationUserId == user.Id), "Id", "FullName", book.AuthorId);
+            return View(book);
         }
 
-        // POST: Authors/Edit/5
+        // POST: Books/Edit/5
         // To protect from overposting attacks, please enable the specific properties you want to bind to, for 
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,FirstName,LastName,Penname,PreferredGenre,ApplicationUserId")] Author author)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,ISBN,Title,Genre,PublishedDate,AuthorId,ApplicationUserId")] Book book)
         {
-            if (id != author.Id)
+            if (id != book.Id)
+            {
+                return NotFound();
+            }
+
+            var isUserBook = await WasCreatedByUser(book);
+            if (!isUserBook)
             {
                 return NotFound();
             }
@@ -127,12 +134,12 @@ namespace Bookshelf.Controllers
             {
                 try
                 {
-                    _context.Update(author);
+                    _context.Update(book);
                     await _context.SaveChangesAsync();
                 }
                 catch (DbUpdateConcurrencyException)
                 {
-                    if (!AuthorExists(author.Id))
+                    if (!BookExists(book.Id))
                     {
                         return NotFound();
                     }
@@ -144,10 +151,11 @@ namespace Bookshelf.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            return View(author);
+            ViewData["AuthorId"] = new SelectList(_context.Author, "Id", "FirstName", book.AuthorId);
+            return View(book);
         }
 
-        // GET: Authors/Delete/5
+        // GET: Books/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -155,38 +163,45 @@ namespace Bookshelf.Controllers
                 return NotFound();
             }
 
-            var author = await _context.Author
-                .Include(a => a.ApplicationUser)
+            var book = await _context.Book
+                .Include(b => b.ApplicationUser)
+                .Include(b => b.Author)
                 .FirstOrDefaultAsync(m => m.Id == id);
-            if (author == null)
+            if (book == null)
             {
                 return NotFound();
             }
 
-            var wasCreatedByLoggedInUser = await WasCreatedByUser(author);
-
-            if (!wasCreatedByLoggedInUser)
+            var isUserBook = await WasCreatedByUser(book);
+            if (!isUserBook)
             {
                 return NotFound();
             }
 
-            return View(author);
+            return View(book);
         }
 
-        // POST: Authors/Delete/5
+        // POST: Books/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var author = await _context.Author.FindAsync(id);
-            _context.Author.Remove(author);
+            var book = await _context.Book.FindAsync(id);
+
+            var isUserBook = await WasCreatedByUser(book);
+            if (!isUserBook)
+            {
+                return NotFound();
+            }
+
+            _context.Book.Remove(book);
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
 
-        private bool AuthorExists(int id)
+        private bool BookExists(int id)
         {
-            return _context.Author.Any(e => e.Id == id);
+            return _context.Book.Any(e => e.Id == id);
         }
 
         private Task<ApplicationUser> GetUserAsync()
@@ -194,10 +209,10 @@ namespace Bookshelf.Controllers
             return _userManager.GetUserAsync(HttpContext.User);
         }
 
-        private async Task<bool> WasCreatedByUser(Author author)
+        private async Task<bool> WasCreatedByUser(Book book)
         {
             var user = await GetUserAsync();
-            return author.ApplicationUserId == user.Id;
+            return book.ApplicationUserId == user.Id;
         }
     }
 }
