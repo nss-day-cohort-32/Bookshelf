@@ -25,14 +25,24 @@ namespace Bookshelf.Controllers
         }
 
         // GET: Books
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(int? author)
         {
             var user = await GetUserAsync();
-            var applicationDbContext = _context.Book
+            var books = _context.Book
                 .Where(b => b.ApplicationUserId == user.Id)
                 .Include(b => b.ApplicationUser)
                 .Include(b => b.Author);
-            return View(await applicationDbContext.ToListAsync());
+
+            if (author != null)
+            {
+                var authorBooks = books.Where(b => b.AuthorId == author);
+                return View(await authorBooks.ToListAsync());
+            }
+            else
+            {
+                return View(await books.ToListAsync());
+            }
+
         }
 
         // GET: Books/Details/5
