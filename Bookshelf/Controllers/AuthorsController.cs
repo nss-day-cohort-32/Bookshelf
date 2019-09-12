@@ -28,10 +28,10 @@ namespace Bookshelf.Controllers
         public async Task<IActionResult> Index()
         {
             var user = await GetUserAsync();
-            var applicationDbContext = _context.Author
+            var authors = _context.Author
                 .Where(a => a.ApplicationUserId == user.Id)
                 .Include(a => a.ApplicationUser);
-            return View(await applicationDbContext.ToListAsync());
+            return View(await authors.ToListAsync());
         }
 
         // GET: Authors/Details/5
